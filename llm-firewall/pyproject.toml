@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-firewall"
+version = "0.1.0"
+description = "Production-grade LLM jailbreak / prompt-injection detection firewall."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Security Engineering" }]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "S", "T20"]
+# S101 assert used—allowed in tests.
+# S104 hardcoded 0.0.0.0 bind—we validate this via config, not by lint.
+# B008 Depends() in defaults—the FastAPI-idiomatic pattern; not a bug here.
+# N818 exception name without Error suffix—we prefer ClassifierUnavailable
+#      because it reads as a state rather than an error class.
+ignore = ["S101", "S104", "B008", "N818"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use asserts, print, and bare exception patterns.
+"tests/**" = ["S", "T20"]
+# auth.py has a legitimate CLI helper (T201) and a hash-verify loop that
+# intentionally continues past malformed entries (S112, BLE001).
+"src/firewall/api/auth.py" = ["T201", "S112", "BLE001"]
+# Training/eval scripts print to stdout by design.
+"models/*.py" = ["T201"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: fast, isolated unit tests",
+    "integration: multi-module tests",
+    "redteam: adversarial suite (may be slow)",
+    "slow: excluded from default runs",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_return_any = true

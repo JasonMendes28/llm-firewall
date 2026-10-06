@@ -1,0 +1,33 @@
+# Caddy front-door: TLS termination + reverse proxy to the firewall.
+#
+# Replace `firewall.example.com` with your actual hostname. Caddy will
+# automatically obtain and renew a Let's Encrypt certificate on first run,
+# assuming ports 80/443 are reachable from the internet.
+#
+# For local development or environments without public DNS, replace the
+# hostname with `:443` and provide your own cert via `tls /path/to/cert /path/to/key`.
+
+firewall.example.com {
+    encode gzip
+    # Strong TLS defaults are set by Caddy automatically (TLS 1.2+, modern ciphers).
+
+    # Security headers.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        # We do NOT return CSP here because this is a JSON API, not a browser app.
+        -Server
+    }
+
+    # Proxy to the firewall container by service name.
+    reverse_proxy firewall:8080 {
+        # Forward the real client IP so the firewall can key rate-limits by IP
+        # when API-key rotation is in flight. TRUST_PROXY=true in the firewall's
+        # env acknowledges we trust these headers.
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

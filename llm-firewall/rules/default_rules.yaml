@@ -1,0 +1,163 @@
+# =============================================================================
+# Default regex ruleset for the LLM Firewall.
+#
+# Rules are data, not code. Add rules here, run the schema validator (invoked
+# automatically at service startup), and redeploy — no code change required.
+#
+# Field reference:
+#   id:          Stable identifier. NEVER reuse an ID; retire old ones instead.
+#                Format: R-<CATEGORY>-<3-digit>. IDs are what the API returns.
+#   category:    Freeform grouping used for internal reporting only.
+#   severity:    low | medium | high  (maps to fusion weights 0.3 / 0.6 / 0.9)
+#   pattern:     Python regex, evaluated with re.IGNORECASE|re.DOTALL against
+#                the canonical form and every decoded probe.
+#   description: Internal-only; NOT surfaced in API responses. Explain what the
+#                rule catches, cite an example attack if useful.
+#
+# Threat-model note: descriptions are considered internal. If you publish this
+# file publicly, rotate/rename rule IDs so attackers can't map RULE_047 back to
+# a description they can iterate against.
+# =============================================================================
+
+rules:
+  # ------------------ Direct instruction override ------------------
+  - id: R-OVERRIDE-001
+    category: instruction_override
+    severity: high
+    pattern: '\bignore\s+(?:all\s+|the\s+|any\s+)?(?:previous|prior|preceding|above)\s+(?:instructions?|prompts?|rules?|directives?)\b'
+    description: >
+      Classic "ignore previous instructions" family. High precision — almost
+      never appears in legitimate prompts outside of security-research quoting.
+
+  - id: R-OVERRIDE-002
+    category: instruction_override
+    severity: high
+    pattern: '\bdisregard\s+(?:all\s+|the\s+|any\s+)?(?:previous|prior|above|system)\s+(?:instructions?|prompts?|rules?)\b'
+    description: Synonym variant of R-OVERRIDE-001.
+
+  - id: R-OVERRIDE-003
+    category: instruction_override
+    severity: high
+    pattern: '\b(?:forget|discard|abandon)\s+(?:everything|all|your)\s+(?:above|prior|previous|instructions?|training|guidelines?)\b'
+    description: Softer instruction-override phrasing; kept at high once corpus showed strong precision.
+
+  - id: R-OVERRIDE-004
+    category: instruction_override
+    severity: high
+    pattern: '\b(?:forget|discard|abandon)\s+(?:everything|all)\s+(?:you\s+(?:were|have\s+been)\s+(?:told|given|instructed|trained)|(?:i|we)\s+(?:told|said|gave))\b'
+    description: >
+      Covers 'forget everything you were told' where the object is a relative
+      clause instead of a direct noun. Added after red-team miss.
+
+  # ------------------ Role-play jailbreaks ------------------
+  - id: R-ROLEPLAY-001
+    category: roleplay_jailbreak
+    severity: high
+    pattern: '\b(?:you\s+are\s+now|from\s+now\s+on\s+you\s+are|act\s+as|pretend\s+to\s+be)\s+(?:dan|an?\s+ai\s+(?:without|with\s+no)\s+restrictions?|an?\s+uncensored|an?\s+unrestricted|an?\s+evil|jailbroken|dev\s*mode)\b'
+    description: DAN and DAN-family role-play jailbreaks.
+
+  - id: R-ROLEPLAY-002
+    category: roleplay_jailbreak
+    severity: high
+    pattern: '\bdo\s+anything\s+now\b'
+    description: Literal "Do Anything Now" phrase from the DAN corpus.
+
+  - id: R-ROLEPLAY-003
+    category: roleplay_jailbreak
+    severity: high
+    pattern: '\b(?:developer|dev|debug|god|admin|root|maintenance|sudo)\s+mode\s+(?:on|enabled|activated|engaged)\b'
+    description: Fake "mode" activation strings used to trick the model into a permissive persona.
+
+  - id: R-ROLEPLAY-004
+    category: roleplay_jailbreak
+    severity: high
+    pattern: '\byou\s+have\s+no\s+(?:restrictions?|filters?|limits?|rules?|guidelines?|ethics?|morals?|content\s+policies?)\b'
+    description: Direct assertion that the model is unconstrained.
+
+  # ------------------ System prompt exfiltration ------------------
+  - id: R-EXFIL-001
+    category: system_prompt_exfil
+    severity: high
+    pattern: '\b(?:repeat|reveal|show|print|display|output|return)\s+(?:your|the)\s+(?:(?:original|initial|first|prior|earlier)\s+)?(?:system\s+prompt|initial\s+prompt|instructions?|prompt\s+above|guidelines?)\b'
+    description: Explicit system-prompt exfiltration attempts, incl. 'initial/original instructions'.
+
+  - id: R-EXFIL-002
+    category: system_prompt_exfil
+    severity: high
+    pattern: '\bwhat\s+(?:are|were)\s+(?:your|the)\s+(?:original\s+|initial\s+)?(?:instructions?|system\s+prompt|guidelines?)\b'
+    description: Interrogative variant of R-EXFIL-001.
+
+  - id: R-EXFIL-003
+    category: system_prompt_exfil
+    severity: high
+    pattern: '\bprint\s+(?:everything\s+)?(?:above|before)\s+this\s+(?:line|message|prompt)\b'
+    description: Print-everything-above trick.
+
+  # ------------------ Encoding trick markers ------------------
+  - id: R-ENCODE-001
+    category: encoding_evasion
+    severity: medium
+    pattern: '\b(?:decode|decrypt|translate)\s+(?:the\s+following|this)\s+(?:base64|hex|rot13|binary)\b'
+    description: Explicit request to decode/execute encoded payloads.
+
+  - id: R-ENCODE-002
+    category: encoding_evasion
+    severity: low
+    pattern: '\brespond\s+(?:in|using|only\s+in)\s+(?:base64|hex|rot13|leetspeak|pig\s+latin)\b'
+    description: Trying to route the response through an encoding to bypass output filters.
+
+  # ------------------ Policy-bypass framing ------------------
+  - id: R-BYPASS-001
+    category: policy_bypass
+    severity: high
+    pattern: '\b(?:bypass|circumvent|get\s+around|work\s+around)\s+(?:your|the|all|any)\s+(?:safety|content|ethical|moral)\s+(?:filters?|guidelines?|guardrails?|restrictions?)\b'
+    description: Direct request to bypass safety systems.
+
+  - id: R-BYPASS-002
+    category: policy_bypass
+    severity: high
+    pattern: '\bfor\s+(?:educational|research|hypothetical|academic|fictional)\s+purposes\s+only\b.{0,300}\b(?:how\s+to|steps?\s+to|instructions?\s+for|detailed\s+steps?|provide\s+detailed|synthesize|make|build|create|hack)\b'
+    description: >
+      "For educational purposes only" combined with a how-to or actionable
+      keyword. Bounded distance so we don't fire on legitimate uses of the phrase.
+
+  - id: R-BYPASS-003
+    category: policy_bypass
+    severity: high
+    pattern: '\bhypothetically\s+speaking\b.{0,300}\b(?:harmful|illegal|dangerous|weapon|exploit|malware|hack|steal|credentials?|virus|bomb)\b'
+    description: Hypothetical framing combined with a harmful topic.
+
+  # ------------------ Refusal suppression ------------------
+  - id: R-REFUSAL-001
+    category: refusal_suppression
+    severity: high
+    pattern: |-
+      \b(?:do\s+not|don't|never)\s+(?:refuse|say\s+(?:no|you\s+can'?t|i\s+can'?t)|apologize|warn|caveat|mention\s+(?:ethics|safety|policy))\b
+    description: Instructions to suppress refusal behavior.
+
+  - id: R-REFUSAL-002
+    category: refusal_suppression
+    severity: high
+    pattern: |-
+      \b(?:begin|start)\s+(?:your\s+)?(?:response|reply|answer)\s+with\s+["']?(?:sure|certainly|of\s+course|absolutely|here'?s?\s+how)\b
+    description: Prefix injection to force a compliant opening.
+
+  # ------------------ Obfuscated & Delimiter Injection ------------------
+  - id: R-OVERRIDE-005
+    category: instruction_override
+    severity: high
+    pattern: '\bi\s*g\s*n\s*o\s*r\s*e\s+(?:a\s*l\s*l\s+)?(?:p\s*r\s*e\s*v\s*i\s*o\s*u\s*s|p\s*r\s*i\s*o\s*r)\b'
+    description: Spaced and token-split variants of ignore previous.
+
+  - id: R-DELIMITER-001
+    category: template_injection
+    severity: high
+    pattern: '(?:<\s*\|\s*im_start\s*\|\s*>|<\s*\|\s*end_of_turn\s*\|\s*>|\[\s*INST\s*\]|\[\s*/\s*INST\s*\]|<<SYS>>|<</SYS>>)'
+    description: Common prompt template and delimiter injection tokens used to escape context.
+
+  - id: R-ROLEPLAY-005
+    category: roleplay_jailbreak
+    severity: high
+    pattern: '\b(?:jailbreak\s*mode|unfiltered\s*persona|unhinged\s*mode|evil\s*confidant|anarchy\s*mode)\b'
+    description: Extended adversarial persona activation patterns.
+

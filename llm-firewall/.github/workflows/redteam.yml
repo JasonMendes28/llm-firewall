@@ -1,0 +1,35 @@
+name: Red-team nightly
+
+on:
+  schedule:
+    # 03:17 UTC — offset so we don't cluster with everyone else on the hour.
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  redteam:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements-dev.txt
+
+      - name: Red-team suite
+        env:
+          PYTHONPATH: src
+        run: pytest tests/redteam -v --tb=short
+
+      - name: Upload metrics report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: redteam-metrics
+          path: tests/redteam/report.json

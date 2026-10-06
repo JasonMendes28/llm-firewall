@@ -1,0 +1,31 @@
+# Development overrides.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Differences from prod compose:
+# - No Caddy; firewall exposed directly on :8080 (HTTP).
+# - DEBUG_TIMING on so you see per-layer latency in verdicts.
+# - Source mounted read-only for `--reload`.
+
+services:
+  firewall:
+    environment:
+      FIREWALL_ENV: dev
+      TRUST_PROXY: "false"
+      DEBUG_TIMING: "true"
+      LOG_FULL_PROMPTS: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/app/src:ro
+      - ./rules:/app/rules:ro
+    command:
+      - uvicorn
+      - firewall.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --reload
+
+  caddy:
+    profiles: ["disabled"]
